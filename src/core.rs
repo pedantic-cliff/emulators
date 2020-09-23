@@ -1,4 +1,4 @@
-
+use crate::procvalue::ProcValue;
 use crate::instr::*;
 use crate::cpu::Cpu;
 
@@ -104,25 +104,25 @@ pub fn exec(c: &mut Cpu, instr: Instr) -> () {
 
         Mnem::Add(src, dst, b) => {
             let (x,y) = ( get_op_value(c, dst, b) , get_op_value(c, src, b));
-            let (sum, carry, overflow) = inst_add( x, y, 0 );
+            let (sum, carry, overflow) = inst_add( x, y, 0, b );
             c.set_flags(sum, carry, overflow);
             set_op_value(c, dst, b, sum);
         },
         Mnem::Addc(src, dst, b) => {
             let (x,y) = ( get_op_value(c, dst, b) , get_op_value(c, src, b));
-            let (sum, carry, overflow) = inst_add( x, y, if c.c_get() {1} else {0} );
+            let (sum, carry, overflow) = inst_add( x, y, if c.c_get() {1} else {0}, b);
             c.set_flags(sum, carry, overflow);
             set_op_value(c, dst, b, sum);
         },
         Mnem::Sub(src, dst, b) => {
             let (x,y) = ( get_op_value(c, dst, b) , get_op_value(c, src, b));
-            let (sum, carry, overflow) = inst_sub( x, y, if c.c_get() {1} else {0} );
+            let (sum, carry, overflow) = inst_sub( x, y, if c.c_get() {1} else {0}, b );
             c.set_flags(sum, carry, overflow);
             set_op_value(c, dst, b, sum);
         },
         Mnem::Subc(src, dst, b) => {
             let (x,y) = ( get_op_value(c, dst, b) , get_op_value(c, src, b));
-            let (sum, carry, overflow) = inst_sub( x, y, if c.c_get() {1} else {0} );
+            let (sum, carry, overflow) = inst_sub( x, y, if c.c_get() {1} else {0}, b);
             c.set_flags(sum, carry, overflow);
             set_op_value(c, dst, b, sum);
         },
@@ -153,7 +153,7 @@ pub fn exec(c: &mut Cpu, instr: Instr) -> () {
 
         Mnem::Cmp(src, dst, b) => {
             let (x,y) = ( get_op_value(c, dst, b) , get_op_value(c, src, b));
-            let (sum, carry, overflow) = inst_sub( x, y, if c.c_get() {1} else {0} );
+            let (sum, carry, overflow) = inst_sub( x, y, if c.c_get() {1} else {0}, b );
             c.set_flags(sum, carry, overflow);
             // No Value Write-back
         },
@@ -359,10 +359,7 @@ fn get_op_value(c: &mut Cpu, op : Op, size: SizeMode) -> ProcValue {
         Op::PcOffset(_, offset) => offset,
     };
     
-    ProcValue {
-        value : op.value,
-        size  : size,
-    }
+    ProcValue::from(op.value)
 }
 
 
@@ -385,35 +382,29 @@ fn set_op_value(c: &mut Cpu, op : Op, size: SizeMode, value : ProcValue) {
     }
 }
 
-fn inst_add(a: ProcValue, b:ProcValue, c:u16) -> (ProcValue, bool, bool){
-    if a.size != b.size {
-        unimplemented!("Operands don't match, this shouldn't happen!")
-    }
-   
+fn inst_add(a: ProcValue, b:ProcValue, c:u16, size: SizeMode) -> (ProcValue, bool, bool){
+    
     let sum = (a.value as u32) + (b.value as u32) + (c as u32);
    
-    match a.size {
+    match size {
         SizeMode::Byte => (
             ProcValue {
                 value : (sum & 0xFFu32) as u16,
-                size  : a.size
-            },            sum & 0x100 != 0,
-            ( ProcValue::from((sum & 0x80) as u16) != a & 0x80u16 ) 
-                && (a & 0x80 == b & 0x80)
+            },            
+            sum & 0x100 != 0, // Carry
+            (ProcValue::from((sum & 0x80) as u16) != a & 0x80u16) && (a & 0x80 == b & 0x80) // Overflow
         ),
         
         SizeMode::Word => (
             ProcValue {
                 value : (sum & 0xFFFFu32) as u16,
-                size  : a.size
             },
-            sum & 0x10000 != 0,
-            ( ProcValue::from((sum & 0x8000) as u16) != a & 0x8000u16 ) 
-                && (a & 0x8000 == b & 0x8000)
+            sum & 0x10000 != 0, // Carry
+            (ProcValue::from((sum & 0x8000) as u16) != a & 0x8000u16) && (a & 0x8000 == b & 0x8000) //Overflow
         )
     }
 }
 
-fn inst_sub(a: ProcValue, b:ProcValue, c:u16) -> (ProcValue, bool, bool){
-    inst_add(a, -b, c)
+fn inst_sub(a: ProcValue, b:ProcValue, c:u16, size : SizeMode) -> (ProcValue, bool, bool){
+    inst_add(a, -b, c, size)
 }

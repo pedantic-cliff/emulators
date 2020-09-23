@@ -1,143 +1,6 @@
 use std::fmt;
 
-use std::ops;
-use std::convert::From;
-use std::convert::Into;
-
-#[derive(Debug, Copy, Clone, PartialEq)]
-pub struct ProcValue {
-    pub value       : u16,
-    pub size        : SizeMode,
-}
-
-impl From<u16> for ProcValue { 
-    fn from(w : u16) -> Self {
-        ProcValue { 
-            value   : w,
-            size    : SizeMode::Word,
-        }
-    }
-}
-impl From<u8> for ProcValue { 
-    fn from(w : u8) -> Self {
-        ProcValue { 
-            value   : w as u16,
-            size    : SizeMode::Byte,
-        }
-    }
-}
-
-impl Into<u16> for ProcValue { 
-    fn into(self) -> u16 {
-        self.value
-    }
-}
-
-impl ops::Add<ProcValue> for ProcValue { 
-    type Output = ProcValue;
-    fn add(self, other : ProcValue) -> ProcValue {
-        let (res,_) = other.value.overflowing_add(self.value);
-        ProcValue { 
-            value   : res,
-            size    : self.size
-        }
-    }
-}
-impl ops::Add<u16> for ProcValue { 
-    type Output = ProcValue;
-    fn add(self, other : u16) -> ProcValue {
-        let (val,_) = other.overflowing_add(self.value);
-        ProcValue::from(val)
-    }
-}
-
-impl ops::BitOr<ProcValue> for ProcValue { 
-    type Output = ProcValue;
-    fn bitor(self, other : ProcValue) -> ProcValue {
-        ProcValue::from(self.value | other.value)
-    }
-}
-impl ops::BitOr<u16> for ProcValue { 
-    type Output = ProcValue;
-    fn bitor(self, other : u16) -> ProcValue {
-        ProcValue::from(self.value | other)
-    }
-}
-impl ops::BitXor<ProcValue> for ProcValue { 
-    type Output = ProcValue;
-    fn bitxor(self, other : ProcValue) -> ProcValue {
-        ProcValue::from(self.value ^ other.value)
-    }
-}
-impl ops::BitXor<u16> for ProcValue { 
-    type Output = ProcValue;
-    fn bitxor(self, other : u16) -> ProcValue {
-        ProcValue::from(self.value ^ other)
-    }
-}
-impl ops::BitAnd<ProcValue> for ProcValue { 
-    type Output = ProcValue;
-    fn bitand(self, other : ProcValue) -> ProcValue {
-        ProcValue::from(self.value & other.value)
-    }
-}
-impl ops::BitAnd<u16> for ProcValue { 
-    type Output = ProcValue;
-    fn bitand(self, other : u16) -> ProcValue {
-        ProcValue::from(self.value & other)
-    }
-}
-
-impl ops::Mul<ProcValue> for ProcValue { 
-    type Output = ProcValue;
-    fn mul(self, other : ProcValue) -> ProcValue { 
-        let (res, _) = other.value.overflowing_mul(self.value);
-        ProcValue {
-            value   : res,
-            size    : self.size,
-        }
-    }
-}
-impl ops::Mul<u16> for ProcValue { 
-    type Output = ProcValue;
-    fn mul(self, other : u16) -> ProcValue { 
-        let (res, _) = other.overflowing_mul(self.value);
-        ProcValue {
-            value   : res,
-            size    : self.size,
-        }
-    }
-}
-
-impl ops::Neg for ProcValue { 
-    type Output = ProcValue;
-    fn neg(self) -> ProcValue {
-        let val = self.value ^ 0xFFFF;
-        let (val, _) = val.overflowing_add(1);
-        ProcValue { 
-            value   : val,
-            size    : self.size,
-        }
-    }   
-}
-
-impl fmt::Display for ProcValue { 
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "{}", self.value)
-    }
-}
-impl fmt::UpperHex for ProcValue { 
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "{:04X}", self.value)
-    }
-}
-
-impl ProcValue { 
-    pub fn is_neg(&self) -> bool{
-        self.value & 0x8000u16 != 0
-    }
-}
-
+use crate::procvalue::ProcValue;
 
 #[derive(Copy,Clone,Debug,PartialEq)]
 pub enum SizeMode {
@@ -170,6 +33,7 @@ impl fmt::Display for Op {
                 0 => write!(f, "PC" ),
                 1 => write!(f, "SP" ),
                 2 => write!(f, "CG" ),
+                3 => write!(f, "SR" ),
                 _ => write!(f, "R{}", idx)
             },
 
@@ -178,19 +42,18 @@ impl fmt::Display for Op {
             
             // Jump
             Op::PcOffset(addr, offset) => {
-                if offset.value > 0x7FFFu16 {
-                    write!(f, "{:04X}h\t(-{:X}h)", 
-                        *addr + (*offset * 2) + 2, -*(offset))
-                } else 
-                {
-                    write!(f, "{:04X}h\t({:X}h)", 
-                        *addr + (*offset * 2) + 2, offset)
-                }
+                    write!(f, "{:X}h", *addr + (*offset * 2) + 2)
             },
 
             // Symbolic X(PC)
             // Indirect X(Rn)
-            Op::Index(Some(r), offset) => write!(f, "{:X}h({})", offset, Op::Reg(*r)),
+            Op::Index(Some(r), offset) => {
+                if (*offset & 0x8000) != ProcValue::from(0u16) {
+                    write!(f, "-{:X}h({})", -*offset, Op::Reg(*r))
+                } else {
+                    write!(f, "{:X}h({})", offset, Op::Reg(*r))
+                }
+            },
             // Absolute &Addr
             Op::Index(None, offset)    => write!(f, "&{:X}h", offset),
 
@@ -211,13 +74,10 @@ impl fmt::Display for Op {
 
 #[derive(Copy,Clone,Debug)]
 pub enum Condition {
-    Eq,
-    Ne,
-    C,
-    Nc,
+    Eq, Ne,
+    C, Nc,
     N,
-    Ge,
-    L,
+    Ge, L,
     A,
 }
 impl fmt::Display for Condition {
@@ -268,32 +128,32 @@ pub enum Mnem {
 impl fmt::Display for Mnem {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            Mnem::Mov(src,dst,size)  =>  write!(f, "MOV{}\t {}, {}",  size, src, dst),
-            Mnem::Add(src,dst,size)  =>  write!(f, "ADD{}\t {}, {}",  size, src, dst),
-            Mnem::Addc(src,dst,size) =>  write!(f, "ADDC{}\t {}, {}", size, src, dst),
-            Mnem::Sub(src,dst,size)  =>  write!(f, "SUB{}\t {}, {}",  size, src, dst),
-            Mnem::Subc(src,dst,size) =>  write!(f, "SUBC{}\t {}, {}", size, src, dst),
-            Mnem::Dadd(src,dst,size) =>  write!(f, "DADD{}\t {}, {}", size, src, dst),
-            Mnem::Bit(src,dst,size)  =>  write!(f, "BIT{}\t {}, {}",  size, src, dst),
-            Mnem::Bis(src,dst,size)  =>  write!(f, "BIS{}\t {}, {}",  size, src, dst),
-            Mnem::Bic(src,dst,size)  =>  write!(f, "BIS{}\t {}, {}",  size, src, dst),
-            Mnem::Xor(src,dst,size)  =>  write!(f, "XOR{}\t {}, {}",  size, src, dst),
-            Mnem::And(src,dst,size)  =>  write!(f, "AND{}\t {}, {}",  size, src, dst),
-            Mnem::Cmp(src,dst,size)  =>  write!(f, "CMP{}\t {}, {}",  size, src, dst),
+            Mnem::Mov(src,dst,size)  =>  write!(f, "MOV{}\t{}, {}",  size, src, dst),
+            Mnem::Add(src,dst,size)  =>  write!(f, "ADD{}\t{}, {}",  size, src, dst),
+            Mnem::Addc(src,dst,size) =>  write!(f, "ADDC{}\t{}, {}", size, src, dst),
+            Mnem::Sub(src,dst,size)  =>  write!(f, "SUB{}\t{}, {}",  size, src, dst),
+            Mnem::Subc(src,dst,size) =>  write!(f, "SUBC{}\t{}, {}", size, src, dst),
+            Mnem::Dadd(src,dst,size) =>  write!(f, "DADD{}\t{}, {}", size, src, dst),
+            Mnem::Bit(src,dst,size)  =>  write!(f, "BIT{}\t{}, {}",  size, src, dst),
+            Mnem::Bis(src,dst,size)  =>  write!(f, "BIS{}\t{}, {}",  size, src, dst),
+            Mnem::Bic(src,dst,size)  =>  write!(f, "BIS{}\t{}, {}",  size, src, dst),
+            Mnem::Xor(src,dst,size)  =>  write!(f, "XOR{}\t{}, {}",  size, src, dst),
+            Mnem::And(src,dst,size)  =>  write!(f, "AND{}\t{}, {}",  size, src, dst),
+            Mnem::Cmp(src,dst,size)  =>  write!(f, "CMP{}\t{}, {}",  size, src, dst),
 
             Mnem::Jmp(offset, cond)  => match cond {
                 Condition::A =>  write!(f, "JMP\t{}", offset),
-                _            =>  write!(f, "J{} \t{}", cond, offset),           
+                _            =>  write!(f, "J{}\t{}", cond, offset),           
             },
 
-            Mnem::Rrc(dst,size)     => write!(f, "RCC{}\t {}", size, dst),
-            Mnem::Raa(dst,size)     => write!(f, "RRA{}\t {}", size, dst),
-            Mnem::Push(dst,size)    => write!(f, "PUSH{}\t {}", size, dst),
+            Mnem::Rrc(dst,size)     => write!(f, "RCC{}\t{}", size, dst),
+            Mnem::Raa(dst,size)     => write!(f, "RRA{}\t{}", size, dst),
+            Mnem::Push(dst,size)    => write!(f, "PUSH{}\t{}", size, dst),
             
-            Mnem::Swpb(dst)         => write!(f, "SWPB\t {}", dst),
-            Mnem::Call(dst)         => write!(f, "CALL\t {}", dst),
-            Mnem::Reti(dst)         => write!(f, "RETI\t {}", dst),
-            Mnem::Sxt(dst)          => write!(f, "SXT\t {}", dst),
+            Mnem::Swpb(dst)         => write!(f, "SWPB\t{}", dst),
+            Mnem::Call(dst)         => write!(f, "CALL\t{}", dst),
+            Mnem::Reti(dst)         => write!(f, "RETI\t{}", dst),
+            Mnem::Sxt(dst)          => write!(f, "SXT\t{}", dst),
 
             Mnem::Unimpl => write!(f, "UNIMPL")       
         }

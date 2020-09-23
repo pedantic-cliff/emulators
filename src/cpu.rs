@@ -1,6 +1,7 @@
 use std::io;
 use std::fmt;
 
+use crate::procvalue::ProcValue;
 use crate::instr::*; 
 use crate::mem::*;
 
@@ -30,24 +31,29 @@ impl fmt::Display for Cpu {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(f,"CPU :").unwrap();
         
-        write!(f, "\tPC:\t{:04x}", self.get_reg_value(0).value).unwrap();
-        write!(f, "\tSP:\t{:04x}", self.get_reg_value(1).value).unwrap();
+        write!(f, "\tPC :\t{:04X}", self.get_reg_value(0).value).unwrap();
+        write!(f, "\tSP :\t{:04X}", self.get_reg_value(1).value).unwrap();
         
         writeln!(f, "\tFlags: {} {} {} {}", 
+            if self.c_get() {"C"} else {"c"},
             if self.z_get() {"Z"} else {"z"},
             if self.n_get() {"N"} else {"n"},
-            if self.c_get() {"C"} else {"c"},
             if self.v_get() {"V"} else {"v"}
         ).unwrap();
 
         for r in 4..16 {
-            write!(f, "\t{}:\t{:04x}", Op::Reg(r), 
-                    self.get_reg_value(r).value).unwrap();
+            if r < 10 {
+                write!(f, "\t{} :\t{:04X}", Op::Reg(r), 
+                        self.get_reg_value(r).value).unwrap();
+            } else {
+                write!(f, "\t{}:\t{:04X}", Op::Reg(r), 
+                        self.get_reg_value(r).value).unwrap();
+            }
             if r % 4 == 3 {
                 writeln!(f, "").unwrap();
             }
         }
-        writeln!(f,"")
+        write!(f,"")
     }
 }
 
