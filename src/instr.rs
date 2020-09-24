@@ -19,12 +19,13 @@ impl fmt::Display for SizeMode {
 // Page 48
 #[derive(Copy,Clone,Debug,PartialEq)]
 pub enum Op {
-    Reg(u8),                 // Just a Reg index
-    Index(Option<u8>, ProcValue),  // Optional Reg index, Const Offset X
-    Indirect(u8, ProcValue),       // Reg index defines address, increment in {0,1,2}
-    Constant(ProcValue),           // Used by Constant generator type ops
-    Immediate(ProcValue),          // Used for immediate ops
-    PcOffset(ProcValue, ProcValue)       // Addr, Offset
+    Reg(u8),                        // Just a Reg index
+    Index(Option<u8>, ProcValue),   // Optional Reg index, Const Offset X
+    Indirect(u8),                   // Reg index defines address
+    IndirectAutoIncr(u8),           // Reg index defines address, increment based on size
+    Constant(ProcValue),            // Used by Constant generator type ops
+    Immediate(ProcValue),           // Used for immediate ops
+    PcOffset(ProcValue, ProcValue)  // Addr, Offset
 }
 impl fmt::Display for Op {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
@@ -58,13 +59,9 @@ impl fmt::Display for Op {
             Op::Index(None, offset)    => write!(f, "&{:X}h", offset),
 
             // Indirect
-            Op::Indirect(r, v) => {
-                if v.value == 0 {
-                    write!(f, "@{}", Op::Reg(*r))
-                } else {
-                    write!(f, "@{}+", Op::Reg(*r))
-                }
-            },
+            Op::Indirect(r) => write!(f, "@{}", Op::Reg(*r)),
+
+            Op::IndirectAutoIncr(r) => write!(f, "@{}+", Op::Reg(*r)),
 
             // Immediate
             Op::Immediate(imm) => write!(f, "#{:X}h", imm)
@@ -72,7 +69,7 @@ impl fmt::Display for Op {
     } 
 }
 
-#[derive(Copy,Clone,Debug)]
+#[derive(Copy,Clone,Debug,PartialEq)]
 pub enum Condition {
     Eq, Ne,
     C, Nc,
@@ -96,7 +93,7 @@ impl fmt::Display for Condition {
 }
 
 
-#[derive(Copy,Clone,Debug)]
+#[derive(Copy,Clone,Debug,PartialEq)]
 pub enum Mnem {
     Mov( Op, Op, SizeMode),
     Add( Op, Op, SizeMode),
@@ -120,9 +117,9 @@ pub enum Mnem {
     Sxt( Op),
     Swpb(Op),
     Call(Op),
-    Reti(Op),
+    Reti(),
 
-    Unimpl,
+    Unimpl(),
 }
 
 impl fmt::Display for Mnem {
@@ -152,10 +149,10 @@ impl fmt::Display for Mnem {
             
             Mnem::Swpb(dst)         => write!(f, "SWPB\t{}", dst),
             Mnem::Call(dst)         => write!(f, "CALL\t{}", dst),
-            Mnem::Reti(dst)         => write!(f, "RETI\t{}", dst),
             Mnem::Sxt(dst)          => write!(f, "SXT\t{}", dst),
+            Mnem::Reti()            => write!(f, "RETI"),
 
-            Mnem::Unimpl => write!(f, "UNIMPL")       
+            Mnem::Unimpl() => write!(f, "UNIMPL")       
         }
     }
 }

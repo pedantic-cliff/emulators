@@ -3,15 +3,22 @@ mod cpu;
 mod core;
 mod mem;
 mod procvalue;
+mod control;
+#[macro_use] extern crate scan_fmt;
+
 
 fn main() {
     let mut cpu = cpu::cpu("./test/test.bin");
-
+    let mut control = control::control();
+    control.control_loop(&mut cpu);
+    /*
     println!("{}", cpu);
-    while cpu.get_pc() != procvalue::ProcValue::from(0xC078u16) {
+    for _ in 1..18 {
         core::step(&mut cpu);
         println!("{}", cpu);
     }
-    println!("{}", cpu);
+    */
+    
+    return; 
     
 }

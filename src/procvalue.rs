@@ -44,6 +44,22 @@ impl ops::Add<u16> for ProcValue {
         ProcValue::from(val)
     }
 }
+impl ops::Sub<ProcValue> for ProcValue { 
+    type Output = ProcValue;
+    fn sub(self, other : ProcValue) -> ProcValue {
+        let other = -other;
+        let (res,_) = other.value.overflowing_add(self.value);
+        ProcValue::from(res)
+    }
+}
+impl ops::Sub<u16> for ProcValue { 
+    type Output = ProcValue;
+    fn sub(self, other : u16) -> ProcValue {
+        let other = 1 + (other ^ 0xFFFF);
+        let (val,_) = other.overflowing_add(self.value);
+        ProcValue::from(val)
+    }
+}
 
 impl ops::BitOr<ProcValue> for ProcValue { 
     type Output = ProcValue;
@@ -114,11 +130,5 @@ impl fmt::Display for ProcValue {
 impl fmt::UpperHex for ProcValue { 
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(f, "{:X}", self.value)
-    }
-}
-
-impl ProcValue { 
-    pub fn is_neg(&self) -> bool{
-        self.value & 0x8000u16 != 0
     }
 }
