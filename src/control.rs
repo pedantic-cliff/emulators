@@ -10,7 +10,7 @@ use std::io;
 use std::io::Write;
 
 pub struct Control {
-    bps: Vec<u16>
+    bps: Vec<ProcValue>
 }
 
 pub fn control() -> Control{
@@ -63,7 +63,7 @@ impl Control {
                     step(cpu);
 
                     let addr = cpu.get_pc();
-                    if self.bps.contains(&addr.value) {
+                    if self.bps.contains(&addr) {
                         println!("Breakpoint");
                         break;
                     }
@@ -82,7 +82,7 @@ impl Control {
             step(cpu);
             
             let addr = cpu.get_pc(); 
-            if self.bps.iter().any(|&a| a == addr.value) {
+            if self.bps.iter().any(|&a| a == addr) {
                 println!("Break");
                 disassemble(cpu, cpu.get_pc());
                 return;
@@ -93,7 +93,7 @@ impl Control {
     fn breakpoint(&mut self, s: &String) {
         match scan_fmt!(s, "b {x}", [hex u16]) {
             Ok(addr) => {
-                self.bps.push(addr)
+                self.bps.push(ProcValue::from(addr))
             }
             _ => println!("Invalid Address")
         }
