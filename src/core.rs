@@ -196,7 +196,7 @@ pub fn exec(c: &mut Cpu, instr: Instr) -> () {
             let x = ProcValue::from( 
                 match b { 
                     SizeMode::Word => ((old_c << 15) | (x.value >> 1)),
-                    SizeMode::Byte => ((old_c << 15) | (x.value >> 1)),
+                    SizeMode::Byte => ((old_c << 7 ) | (x.value >> 1)),
             });
             c.set_flags(new_c != 0, x.value != 0, is_neg(x,b), false);
             set_op_value(c, dst, b, x);
@@ -221,8 +221,8 @@ pub fn exec(c: &mut Cpu, instr: Instr) -> () {
         Mnem::Sxt(dst) => {
             let value = get_op_value(c, dst, SizeMode::Byte);
             let value = match value.value & 0x80 {
-                1 => value | 0xFF00,
-                _ => value 
+                0x80 => value | 0xFF00,
+                _    => value 
             };
             set_op_value(c, dst, SizeMode::Byte, value);
             c.set_flags(value.value != 0, value.value != 0, 
